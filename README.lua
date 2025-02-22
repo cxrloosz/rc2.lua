@@ -52,16 +52,102 @@ end
 
 local function esquerdaDireitaAction()
     while toggles.esquerdaDireita and task.wait(0) do
-        local sides = {"Right", "Right", "Right", "Right", "Right", "Right", "Left", "Left", "Left", "Left", "Left", "Left"}
-        for _, side in ipairs(sides) do
-            local args = {
-                [1] = {
-                    ["Side"] = side
-                }
+        local args = {
+            [1] = {
+                ["Side"] = "Right"
             }
-            game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
-            wait(0.1)
-        end
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Right"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Right"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Right"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Right"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Right"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Left"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Left"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Left"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Left"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Left"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
+        local args = {
+            [1] = {
+                ["Side"] = "Left"
+            }
+        }
+
+        game:GetService("ReplicatedStorage").Events.Tools.ChangeFishPull:FireServer(unpack(args))
+        wait(.1)
     end
 end
 
