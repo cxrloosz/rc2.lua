@@ -21,5 +21,3 @@ while true do
 		task.wait(1.5)
 	end
 end
-createToggle("esquerdaDireita", "Esquerda Direita", "Liga/desliga o movimento de esquerda e direita")
-createToggle("venda", "Venda", "Liga/desliga a venda automática de peixes")
