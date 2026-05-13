@@ -7,17 +7,16 @@ local remote = game:GetService("ReplicatedStorage")
 	:WaitForChild("container")
 	:WaitForChild("items.setBoostRunning")
 
-local boosts = {
-	"Ultra Drops Boost",
-	"Ultra Damage Boost",
-	"Mythical Potion",
-	"Speed III Boost",
-	"Omega Luck Boost"
-}
-
 while true do
-	for _, boostName in ipairs(boosts) do
-		remote:FireServer(boostName, true)
-		task.wait(1.5)
-	end
+    -- Mythical Potion com 0.7s
+    remote:FireServer("Mythical Potion", true)
+    task.wait(0.7)
+
+    -- Speed III Boost com 0.8s
+    remote:FireServer("Speed III Boost", true)
+    task.wait(0.8)
+
+    -- Omega Luck Boost com 0.9s
+    remote:FireServer("Omega Luck Boost", true)
+    task.wait(0.9)
 end
