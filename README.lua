@@ -43,24 +43,30 @@ makePromptsInstant()
 
 -- Função de Auto Server Hop
 local function serverHop()
+    -- Coloca isto aqui diretamente para enfileirar antes de saltar:
+    local qf = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+    if qf then
+        pcall(function()
+            qf('loadstring(game:HttpGet("https://raw.githubusercontent.com/cxrloosz/rc2.lua/refs/heads/main/README.lua"))()')
+        end)
+    end
+
     print("[ServerHop] Procurando um novo servidor...")
     local success, result = pcall(function()
         local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
         local response = game:HttpGet(url)
         return HttpService:JSONDecode(response)
     end)
-
+    
     if success and result and result.data then
         for _, server in ipairs(result.data) do
             if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                print("[ServerHop] Entrando no servidor ID: " .. server.id)
                 TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
                 return
             end
         end
     end
-
-    print("[ServerHop] Usando método padrão de Teleport...")
+    
     TeleportService:Teleport(game.PlaceId, LocalPlayer)
 end
 
