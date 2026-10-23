@@ -3,6 +3,20 @@
 -- Só roda no jogo específico (aceita PlaceId ou GameId/UniverseId)
 local ALLOWED_ID = 87029994390208
 if game.PlaceId ~= ALLOWED_ID and game.GameId ~= ALLOWED_ID then
+    -- Jogo errado: remove qualquer HUD/loop que tenha sobrado e encerra
+    pcall(function()
+        if getgenv and getgenv().RC2_CLEANUP then getgenv().RC2_CLEANUP() end
+    end)
+    pcall(function()
+        for _, c in ipairs(game:GetService("CoreGui"):GetChildren()) do
+            if c.Name == "RC2_HUD" then c:Destroy() end
+        end
+    end)
+    pcall(function()
+        for _, c in ipairs(gethui():GetChildren()) do
+            if c.Name == "RC2_HUD" then c:Destroy() end
+        end
+    end)
     return
 end
 
@@ -96,6 +110,7 @@ local qf = queue_on_teleport or queueonteleport
 local function queueScript()
     if not qf then return end
     local code = ([==[
+        if game.PlaceId ~= %s and game.GameId ~= %s then return end
         repeat task.wait() until game:IsLoaded()
         task.wait(2)
         print("[RC2] Loader: executando script enfileirado...")
@@ -117,7 +132,7 @@ local function queueScript()
             return
         end
         fn()
-    ]==]):format(LOCAL_FILE, LOCAL_FILE, SCRIPT_URL)
+    ]==]):format(tostring(ALLOWED_ID), tostring(ALLOWED_ID), LOCAL_FILE, LOCAL_FILE, SCRIPT_URL)
     pcall(qf, code)
 end
 
