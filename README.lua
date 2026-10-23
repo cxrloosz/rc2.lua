@@ -1,7 +1,15 @@
 -- RC2 HUD: Auto Nests + Server Hop + Fuse loops (com toggles)
 
+-- Só roda no jogo específico (aceita PlaceId ou GameId/UniverseId)
+local ALLOWED_ID = 87029994390208
+if game.PlaceId ~= ALLOWED_ID and game.GameId ~= ALLOWED_ID then
+    return
+end
+
 local SCRIPT_URL = "https://raw.githubusercontent.com/cxrloosz/rc2.lua/refs/heads/main/README.lua"
 local CONFIG_FILE = "rc2_config.json"
+local LOCAL_FILE = "rc2_hud.lua" -- cópia deste script na pasta workspace do executor
+print("[RC2] Script iniciado | PlaceId: " .. tostring(game.PlaceId))
 local FUSE_DELAY = 0.15   -- segundos entre cada Fuse (aumente se der lag/kick)
 local MAX_RUNTIME = 120   -- segundos: se o farm travar, força o hop
 local FUSE_NAMES = { "ExuSeteChaves", "PombagiraRainha", "ExuVeludo" }
@@ -87,11 +95,30 @@ local qf = queue_on_teleport or queueonteleport
 
 local function queueScript()
     if not qf then return end
-    pcall(qf, ([[
+    local code = ([==[
         repeat task.wait() until game:IsLoaded()
         task.wait(2)
-        loadstring(game:HttpGet("%s"))()
-    ]]):format(SCRIPT_URL))
+        print("[RC2] Loader: executando script enfileirado...")
+        local src
+        pcall(function()
+            if isfile and isfile("%s") then src = readfile("%s") end
+        end)
+        if not src or #src < 200 then
+            local ok, res = pcall(function() return game:HttpGet("%s") end)
+            if ok then
+                src = res
+            else
+                warn("[RC2] Loader: falha ao baixar o script: " .. tostring(res))
+            end
+        end
+        local fn, err = loadstring(src or "")
+        if not fn then
+            warn("[RC2] Loader: erro ao carregar o script: " .. tostring(err))
+            return
+        end
+        fn()
+    ]==]):format(LOCAL_FILE, LOCAL_FILE, SCRIPT_URL)
+    pcall(qf, code)
 end
 
 if qf then
