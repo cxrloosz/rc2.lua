@@ -4,6 +4,8 @@
 local ALLOWED_ID = 87029994390208
 if game.PlaceId ~= ALLOWED_ID and game.GameId ~= ALLOWED_ID then
     -- Jogo errado: remove qualquer HUD/loop que tenha sobrado e encerra
+    warn("[RC2] Jogo diferente do permitido. PlaceId atual: " .. tostring(game.PlaceId)
+        .. " | GameId atual: " .. tostring(game.GameId))
     pcall(function()
         if getgenv and getgenv().RC2_CLEANUP then getgenv().RC2_CLEANUP() end
     end)
