@@ -1,176 +1,203 @@
+-- rc2 corrigido: carrega após trocar de servidor e nunca fica travado
+
+local SCRIPT_URL = "https://raw.githubusercontent.com/cxrloosz/rc2.lua/refs/heads/main/README.lua"
+local MAX_RUNTIME = 120 -- segundos: se passar disso, força o hop
+
+-- Evita rodar duas vezes no mesmo servidor (autoexec + queue)
+repeat task.wait() until game:IsLoaded()
+
+-- Sistema de parada (persiste mesmo com a fila do queue_on_teleport)
+local STOP_FILE = "rc2_stop.txt"
+local function isStopped()
+    if getgenv and getgenv().RC2_STOP then return true end
+    local ok, exists = pcall(function() return isfile and isfile(STOP_FILE) end)
+    return ok and exists == true
+end
+
+if isStopped() then
+    warn("[RC2] Script parado. Para reativar, apague o arquivo rc2_stop.txt.")
+    return
+end
+
+-- Trava por servidor: só bloqueia se JÁ rodou NESTE servidor (JobId)
+if getgenv then
+    if getgenv().RC2_JOB == game.JobId then return end
+    getgenv().RC2_JOB = game.JobId
+end
+
 local Players = game:GetService("Players")
+repeat task.wait() until Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
 
-local LocalPlayer = Players.LocalPlayer
-
--- 1. IMPORTANTE PARA AUTOEXEC: Espera o jogo carregar 100% no novo servidor
-repeat task.wait() until game:IsLoaded()
-task.wait(2) -- Pequena folga para estabilizar a conexão
-
--- Aguarda o personagem e o RootPart de forma segura
-local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local rootPart = character:WaitForChild("HumanoidRootPart", 10)
-if not rootPart then
-    LocalPlayer.CharacterAdded:Wait()
-    rootPart = LocalPlayer.Character:WaitForChild("HumanoidRootPart")
+-- Pressione END para parar tudo
+local function stopAll()
+    if getgenv then getgenv().RC2_STOP = true end
+    pcall(function() if writefile then writefile(STOP_FILE, "stop") end end)
+    warn("[RC2] PARADO. Nenhum novo hop será feito.")
 end
-
--- CFrame de entrega/recuo após interagir
-local RETURN_CFRAME = CFrame.new(20, 5.82999992, -28, 0, 0, -1, 1, 0, 0, 0, -1, 0)
-
--- Torna todos os ProximityPrompts instantâneos
-local function makePromptsInstant()
-    print("[Script] Configurando ProximityPrompts para instantâneo...")
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") then
-            obj.HoldDuration = 0
-            obj.MaxActivationDistance = 9999
-        end
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.End then
+        stopAll()
     end
+end)
 
-    Workspace.DescendantAdded:Connect(function(obj)
-        if obj:IsA("ProximityPrompt") then
-            obj.HoldDuration = 0
-            obj.MaxActivationDistance = 9999
-        end
-    end)
+-- 1) Enfileira o script ANTES de qualquer coisa
+local qf = queue_on_teleport or queueonteleport
+    or (syn and syn.queue_on_teleport)
+    or (fluxus and fluxus.queue_on_teleport)
+
+local function queueScript()
+    if not qf then return end
+    pcall(qf, ([[
+        repeat task.wait() until game:IsLoaded()
+        task.wait(2)
+        loadstring(game:HttpGet("%s"))()
+    ]]):format(SCRIPT_URL))
 end
 
-makePromptsInstant()
+if qf then
+    queueScript()
+else
+    warn("[RC2] Executor sem queue_on_teleport. Coloque o script na pasta autoexec!")
+end
 
--- Função de Auto Server Hop
+task.wait(2)
+
+local RETURN_CFRAME = CFrame.new(20, 5.83, -28, 0, 0, -1, 1, 0, 0, 0, -1, 0)
+
+-- 2) Server hop robusto
+local hopping = false
 local function serverHop()
-    -- Coloca isto aqui diretamente para enfileirar antes de saltar:
-    local qf = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
-    if qf then
-        pcall(function()
-            qf('loadstring(game:HttpGet("https://raw.githubusercontent.com/cxrloosz/rc2.lua/refs/heads/main/README.lua"))()')
-        end)
-    end
+    if hopping or isStopped() then return end
+    hopping = true
+    print("[RC2] Procurando novo servidor...")
 
-    print("[ServerHop] Procurando um novo servidor...")
-    local success, result = pcall(function()
-        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
-        local response = game:HttpGet(url)
-        return HttpService:JSONDecode(response)
-    end)
-    
-    if success and result and result.data then
-        for _, server in ipairs(result.data) do
-            if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
-                return
+    local candidates = {}
+    local cursor = ""
+    for _ = 1, 3 do -- até 3 páginas
+        local ok, result = pcall(function()
+            local url = "https://games.roblox.com/v1/games/" .. game.PlaceId
+                .. "/servers/Public?sortOrder=Asc&limit=100"
+                .. (cursor ~= "" and ("&cursor=" .. cursor) or "")
+            return HttpService:JSONDecode(game:HttpGet(url))
+        end)
+        if not ok or not result or not result.data then break end
+        for _, s in ipairs(result.data) do
+            if s.id ~= game.JobId and s.playing < s.maxPlayers - 1 then
+                table.insert(candidates, s.id)
             end
         end
+        cursor = result.nextPageCursor or ""
+        if cursor == "" then break end
     end
-    
-    TeleportService:Teleport(game.PlaceId, LocalPlayer)
+
+    hopping = false
+    if isStopped() then return end
+    queueScript() -- garante a fila logo antes de sair
+    if #candidates > 0 then
+        local id = candidates[math.random(#candidates)]
+        pcall(TeleportService.TeleportToPlaceInstance, TeleportService, game.PlaceId, id, LocalPlayer)
+    else
+        pcall(TeleportService.Teleport, TeleportService, game.PlaceId, LocalPlayer)
+    end
 end
 
--- Função para encontrar CFrame de um modelo/parte
+-- 3) Se o teleporte falhar, tenta de novo
+TeleportService.TeleportInitFailed:Connect(function(_, _, msg)
+    warn("[RC2] Teleporte falhou: " .. tostring(msg))
+    task.wait(3)
+    serverHop()
+end)
+
+-- 4) Failsafe: se travar por qualquer motivo, troca de servidor
+task.delay(MAX_RUNTIME, function()
+    warn("[RC2] Tempo limite atingido, trocando de servidor.")
+    serverHop()
+end)
+
+-- ProximityPrompts instantâneos
+local function fixPrompt(obj)
+    if obj:IsA("ProximityPrompt") then
+        obj.HoldDuration = 0
+        obj.MaxActivationDistance = 9999
+    end
+end
+for _, obj in ipairs(Workspace:GetDescendants()) do fixPrompt(obj) end
+Workspace.DescendantAdded:Connect(fixPrompt)
+
 local function getObjectCFrame(obj)
-    if obj:IsA("BasePart") then
-        return obj.CFrame
-    elseif obj:IsA("Model") then
-        if obj.PrimaryPart then
-            return obj.PrimaryPart.CFrame
-        else
-            return obj:GetPivot()
-        end
+    if obj:IsA("BasePart") then return obj.CFrame end
+    if obj:IsA("Model") then
+        return obj.PrimaryPart and obj.PrimaryPart.CFrame or obj:GetPivot()
     end
-    return nil
 end
 
--- Função para forçar a interação via ProximityPrompt e simulando a tecla "E"
-local function forceInteract(targetObj)
-    local prompt = targetObj:FindFirstChildOfClass("ProximityPrompt") or targetObj:FindFirstChildWhichIsA("ProximityPrompt", true)
-    
+local function forceInteract(target)
+    local prompt = target:FindFirstChildWhichIsA("ProximityPrompt", true)
     if prompt then
-        prompt.HoldDuration = 0
-        prompt.MaxActivationDistance = 9999
-        
-        pcall(function()
-            if fireproximityprompt then
-                fireproximityprompt(prompt)
-            end
-        end)
-        
+        fixPrompt(prompt)
+        pcall(function() if fireproximityprompt then fireproximityprompt(prompt) end end)
         pcall(function()
             prompt:InputHoldBegin()
             task.wait(0.05)
             prompt:InputHoldEnd()
         end)
-        
-        print("-> ProximityPrompt acionado em: " .. targetObj.Name)
-    else
-        print("-> Nenhum prompt encontrado. Simulando a tecla 'E' diretamente...")
     end
-
     task.wait(0.1)
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     task.wait(0.2)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
--- Loop Principal de Teleporte Instantâneo
+local function getRoot()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    return char:WaitForChild("HumanoidRootPart", 10)
+end
+
+-- 5) Rotina principal (qualquer falha cai no hop)
 task.spawn(function()
-    -- Fica tentando encontrar o Terreiro8 até ele carregar completamente no novo servidor
-    local terreiro8 = nil
-    local startTime = tick()
-    
-    print("[Script] Aguardando o mapa carregar...")
-    while not terreiro8 do
+    getRoot()
+
+    local terreiro8
+    local start = tick()
+    while not terreiro8 and tick() - start < 30 do
         terreiro8 = Workspace:FindFirstChild("Terreiro8", true)
-        if not terreiro8 then
-            task.wait(0.5)
-            -- Se demorar mais de 15 segundos, evita loop eterno caso o mapa mude
-            if tick() - startTime > 15 then
-                warn("[Erro] O mapa Terreiro8 demorou muito para carregar!")
-                return
-            end
+        if not terreiro8 then task.wait(0.5) end
+    end
+
+    local nests = terreiro8 and terreiro8:FindFirstChild("Nests")
+    if not nests then
+        warn("[RC2] Terreiro8/Nests não encontrado, trocando de servidor.")
+        return serverHop()
+    end
+
+    local list = nests:GetChildren()
+    print("[RC2] " .. #list .. " Nests encontrados.")
+
+    for i, nest in ipairs(list) do
+        if isStopped() then
+            warn("[RC2] Rotina interrompida.")
+            return
         end
-    end
-
-    local nestsFolder = terreiro8:FindFirstChild("Nests")
-    if not nestsFolder then
-        warn("[Erro] Pasta 'Nests' não foi encontrada dentro de Terreiro8!")
-        return
-    end
-
-    local nestsList = nestsFolder:GetChildren()
-    print("[Script] " .. #nestsList .. " Nests encontrados. Iniciando rotina...")
-
-    for i, nest in ipairs(nestsList) do
-        local nestCF = getObjectCFrame(nest)
-        
-        if nestCF then
-            print(string.format("[%d/%d] Teleportando para %s...", i, #nestsList, nest.Name))
-            
-            -- Atualiza a referência do rootPart caso tenha resetado
-            local char = LocalPlayer.Character
-            local rPart = char and char:FindFirstChild("HumanoidRootPart")
-            if rPart then
-                rPart.CFrame = nestCF + Vector3.new(0, 1.5, 0)
-            end
-            
+        local cf = getObjectCFrame(nest)
+        if cf then
+            local root = getRoot()
+            if root then root.CFrame = cf + Vector3.new(0, 1.5, 0) end
             task.wait(0.3)
             forceInteract(nest)
             task.wait(0.2)
-            
-            local charAfter = LocalPlayer.Character
-            local rPartAfter = charAfter and charAfter:FindFirstChild("HumanoidRootPart")
-            if rPartAfter then
-                print("-> Retornando para a coordenada indicada...")
-                rPartAfter.CFrame = RETURN_CFRAME
-            end
+            root = getRoot()
+            if root then root.CFrame = RETURN_CFRAME end
             task.wait(0.6)
         end
     end
 
-    print("[Script] Processo de todos os Nests finalizado! Iniciando Server Hop...")
+    print("[RC2] Finalizado, trocando de servidor...")
     task.wait(1)
     serverHop()
 end)
